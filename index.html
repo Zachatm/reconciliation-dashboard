@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Production Reconciliation Board</title>
+    <!-- SheetJS for Live Excel File Uploads -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --panel-bg: #161e2e;
+            --card-bg: #1f293d;
+            --border-color: #2d3748;
+            --text-main: #f7fafc;
+            --text-muted: #a0aec0;
+            --green-status: #10b981;
+            --yellow-status: #f59e0b;
+            --red-status: #ef4444;
+            --accent-blue: #3b82f6;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            padding: 16px;
+            min-height: 100vh;
+        }
+
+        /* Header Bar */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--panel-bg);
+            padding: 16px 24px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            letter-spacing: 1px;
+            color: #fbbf24;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .time-display {
+            font-family: monospace;
+            font-size: 1.3rem;
+            color: #10b981;
+            font-weight: bold;
+            background: #000;
+            padding: 6px 14px;
+            border-radius: 6px;
+            border: 1px solid #059669;
+        }
+
+        .upload-btn {
+            background: var(--accent-blue);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            display: inline-block;
+            transition: background 0.2s;
+        }
+
+        .upload-btn:hover {
+            background: #2563eb;
+        }
+
+        #excelFile {
+            display: none;
+        }
+
+        /* Module Grid */
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 16px;
+        }
+
+        .module-card {
+            border-radius: 8px;
+            padding: 14px;
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            border: 2px solid transparent;
+        }
+
+        .module-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.7);
+        }
+
+        /* Color Coding Themes */
+        .status-green {
+            background: linear-gradient(135deg, #064e3b 0%, #047857 100%);
+            border-color: #10b981;
+        }
+
+        .status-yellow {
+            background: linear-gradient(135deg, #78350f 0%, #b45309 100%);
+            border-color: #f59e0b;
+        }
+
+        .status-red {
+            background: linear-gradient(135deg, #7f1d1d 0%, #b91c1c 100%);
+            border-color: #ef4444;
+        }
+
+        .card-title {
+            font-size: 1.4rem;
+            font-weight: 800;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 6px;
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .hit-rate-badge {
+            font-size: 0.9rem;
+            background: rgba(0,0,0,0.4);
+            padding: 2px 8px;
+            border-radius: 12px;
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            color: #f3f4f6;
+        }
+
+        .metric-row span:last-child {
+            font-weight: bold;
+            font-family: monospace;
+            font-size: 1rem;
+        }
+
+        .alert-row {
+            color: #fecaca;
+            font-weight: bold;
+        }
+
+        /* Modal Pop-up */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            width: 90%;
+            max-width: 1100px;
+            max-height: 85vh;
+            border-radius: 12px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+        }
+
+        .close-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.8rem;
+            cursor: pointer;
+        }
+
+        .close-btn:hover {
+            color: white;
+        }
+
+        .table-container {
+            overflow-y: auto;
+            max-height: 60vh;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background: var(--card-bg);
+            color: var(--text-muted);
+            padding: 12px;
+            position: sticky;
+            top: 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        tr:nth-child(even) {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .status-tag {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .tag-reconciled { background: #065f46; color: #a7f3d0; }
+        .tag-pending { background: #92400e; color: #fef3c7; }
+        .tag-running { background: #1e40af; color: #bfdbfe; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>📊 ON-TIME RECONCILIATION DISPLAY BOARD</h1>
+        <div class="header-controls">
+            <label class="upload-btn" for="excelFile">📁 Upload Excel Dataset</label>
+            <input type="file" id="excelFile" accept=".xlsx, .xls, .csv">
+            <div class="time-display" id="liveClock">00:00:00</div>
+        </div>
+    </div>
+
+    <div class="grid-container" id="moduleGrid">
+        <!-- Module cards will render dynamically here -->
+    </div>
+
+    <!-- Modal Popup for Details -->
+    <div class="modal" id="detailModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Module Details</h2>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Module</th>
+                            <th>Style</th>
+                            <th>Sales Order</th>
+                            <th>Production Order</th>
+                            <th>Order Qty</th>
+                            <th>Line IN Qty</th>
+                            <th>Line OUT Qty</th>
+                            <th>ZREJECT Qty</th>
+                            <th>Aging Days</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modalTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let rawDataset = [];
+
+        // Live Clock
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('liveClock').innerText = now.toLocaleTimeString();
+        }, 1000);
+
+        // Excel File Upload Listener
+        document.getElementById('excelFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const data = new Uint8Array(evt.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                rawDataset = XLSX.utils.sheet_to_json(worksheet);
+                
+                processAndRenderBoard(rawDataset);
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        // Process Data and Render Grid
+        function processAndRenderBoard(data) {
+            const grid = document.getElementById('moduleGrid');
+            grid.innerHTML = '';
+
+            if (!data || data.length === 0) return;
+
+            // Group by Module Column (handles flexible column naming)
+            const grouped = {};
+            data.forEach(row => {
+                const moduleNo = row["Module NO"] || row["Module"] || row["Module No"] || row["Section"] || "UNKNOWN";
+                if (!grouped[moduleNo]) grouped[moduleNo] = [];
+                grouped[moduleNo].push(row);
+            });
+
+            // Calculate Metrics per Module
+            Object.keys(grouped).sort().forEach(modKey => {
+                const rows = grouped[modKey];
+                
+                const totalPOs = rows.length;
+                const reconciledPOs = rows.filter(r => String(r["Status"] || r["Status of the..."]).toLowerCase().includes("reconciled")).length;
+                const pendingRecPOs = rows.filter(r => String(r["Status"] || r["Status of the..."]).toLowerCase().includes("pending")).length;
+                const pendingLineIn = rows.filter(r => Number(r["Line IN"] || r["Line IN Qty"] || 0) === 0).length;
+                const runningPOs = rows.filter(r => String(r["Status"] || r["Status of the..."]).toLowerCase().includes("running")).length;
+                const aging5Plus = rows.filter(r => Number(r["Aging days"] || r["Aging Days"] || 0) > 5).length;
+                
+                const hitRate = totalPOs > 0 ? ((reconciledPOs / totalPOs) * 100).toFixed(0) : 0;
+
+                // Color Rule logic
+                let cardStatusClass = "status-green";
+                if (aging5Plus > 2 || hitRate < 60) {
+                    cardStatusClass = "status-red";
+                } else if (aging5Plus > 0 || hitRate < 85) {
+                    cardStatusClass = "status-yellow";
+                }
+
+                // Render Tile
+                const card = document.createElement('div');
+                card.className = `module-card ${cardStatusClass}`;
+                card.onclick = () => openModal(modKey, rows);
+
+                card.innerHTML = `
+                    <div class="card-title">
+                        <span>MODULE: ${modKey}</span>
+                        <span class="hit-rate-badge">${hitRate}% HR</span>
+                    </div>
+                    <div class="metric-row"><span>Reconciled POs:</span><span>${reconciledPOs}</span></div>
+                    <div class="metric-row"><span>Pending Reconcile:</span><span>${pendingRecPOs}</span></div>
+                    <div class="metric-row"><span>Pending Line IN:</span><span>${pendingLineIn}</span></div>
+                    <div class="metric-row"><span>POs Running:</span><span>${runningPOs}</span></div>
+                    <div class="metric-row ${aging5Plus > 0 ? 'alert-row' : ''}"><span>Aging > 5 Days:</span><span>${aging5Plus}</span></div>
+                `;
+
+                grid.appendChild(card);
+            });
+        }
+
+        // Open Detail Modal
+        function openModal(moduleNo, rows) {
+            document.getElementById('modalTitle').innerText = `Production Orders Summary — Module ${moduleNo}`;
+            const tbody = document.getElementById('modalTableBody');
+            tbody.innerHTML = '';
+
+            rows.forEach(r => {
+                const statusStr = String(r["Status"] || r["Status of the..."] || "Unknown");
+                let tagClass = "tag-pending";
+                if (statusStr.toLowerCase().includes("reconciled")) tagClass = "tag-reconciled";
+                if (statusStr.toLowerCase().includes("running")) tagClass = "tag-running";
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${r["Module NO"] || r["Module"] || moduleNo}</td>
+                    <td>${r["Style"] || '-'}</td>
+                    <td>${r["Sales Order"] || r["SO Order"] || '-'}</td>
+                    <td>${r["Production Order"] || r["SO Order"] || '-'}</td>
+                    <td>${Number(r["Prod. Qty"] || r["Order Qty"] || 0).toLocaleString()}</td>
+                    <td>${Number(r["Line IN"] || r["Line IN Qty"] || 0).toLocaleString()}</td>
+                    <td>${Number(r["Line OUT"] || r["Line OUT Qty"] || 0).toLocaleString()}</td>
+                    <td>${Number(r["ZREJECT"] || 0).toLocaleString()}</td>
+                    <td>${r["Aging days"] || r["Aging Days"] || 0}</td>
+                    <td><span class="status-tag ${tagClass}">${statusStr}</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('detailModal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('detailModal').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
